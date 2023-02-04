@@ -1,51 +1,74 @@
-import keras
-from keras.datasets import mnist
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Flatten
-from keras.layers import Conv2D, MaxPooling2D
-from keras import backend as K
+import time
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-(x_train, y_train), (x_test, y_test) = mnist.load_data()
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, Activation, BatchNormalization, AveragePooling2D
+from tensorflow.keras.optimizers import SGD, RMSprop, Adam
+import tensorflow as tf
+import logging
+import numpy as np
 
-print(x_train.shape, y_train.shape)
 
-num_classes = 10
-x_train = x_train.reshape(x_train.shape[0], 28, 28, 1)
-x_test = x_test.reshape(x_test.shape[0], 28, 28, 1)
-input_shape = (28, 28, 1)
+def mnist_cnn_model():
+   image_size = 28
+   num_channels = 1  # 1 for grayscale images
+   num_classes = 10  # Number of outputs
+   model = Sequential()
+   model.add(Conv2D(filters=32, kernel_size=(3,3), activation='relu',
+            padding='same',
+input_shape=(image_size, image_size, num_channels)))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu',
+            padding='same'))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu',
+            padding='same'))
+   model.add(MaxPooling2D(pool_size=(2, 2)))
+   model.add(Flatten())
+   # Densely connected layers
+   model.add(Dense(128, activation='relu'))
+   # Output layer
+   model.add(Dense(num_classes, activation='softmax'))
+   model.compile(optimizer=Adam(), loss='categorical_crossentropy',
+            metrics=['accuracy'])
+   return model
 
-# преобразование векторных классов в бинарные матрицы
-y_train = keras.utils.to_categorical(y_train, num_classes)
-y_test = keras.utils.to_categorical(y_test, num_classes)
+def mnist_cnn_train(model):
+   (train_digits, train_labels), (test_digits, test_labels) = keras.datasets.mnist.load_data()
 
-x_train = x_train.astype('float32')
-x_test = x_test.astype('float32')
-x_train /= 255
-x_test /= 255
-print('Размерность x_train:', x_train.shape)
-print(x_train.shape[0], 'Размер train')
-print(x_test.shape[0], 'Размер test')
+   # Get image size
+   image_size = 28
+   num_channels = 1  # 1 for grayscale images
 
-batch_size = 128
-epochs = 10
+   # re-shape and re-scale the images data
+   train_data = np.reshape(train_digits, (train_digits.shape[0], image_size, image_size, num_channels))
+   train_data = train_data.astype('float32') / 255.0
+   # encode the labels - we have 10 output classes
+   # 3 -> [0 0 0 1 0 0 0 0 0 0], 5 -> [0 0 0 0 0 1 0 0 0 0]
+   num_classes = 10
+   train_labels_cat = keras.utils.to_categorical(train_labels, num_classes)
 
-model = Sequential()
-model.add(Conv2D(32, kernel_size=(3, 3),activation='relu',input_shape=input_shape))
-model.add(Conv2D(64, (3, 3), activation='relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
-model.add(Dropout(0.25))
-model.add(Flatten())
-model.add(Dense(256, activation='relu'))
-model.add(Dropout(0.5))
-model.add(Dense(num_classes, activation='softmax'))
-model.compile(loss=keras.losses.categorical_crossentropy,optimizer=keras.optimizers.Adadelta(),metrics=['accuracy'])
+   # re-shape and re-scale the images validation data
+   val_data = np.reshape(test_digits, (test_digits.shape[0], image_size, image_size, num_channels))
+   val_data = val_data.astype('float32') / 255.0
+   # encode the labels - we have 10 output classes
+   val_labels_cat = keras.utils.to_categorical(test_labels, num_classes)
 
-hist = model.fit(x_train, y_train, batch_size = batch_size, epochs=epochs, verbose=1, validation_data=(x_test, y_test))
-print("Модель успешно обучена")
+   print("Training the network...")
+   t_start = time.time()
 
-model.save('mnist.h5')
-print("Модель сохранена как mnist.h5")
+   # Start training the network
+   model.fit(train_data, train_labels_cat, epochs=8, batch_size=64,
+        validation_data=(val_data, val_labels_cat))
 
-score = model.evaluate(x_test, y_test, verbose=0)
-print('Потери на тесте:', score[0])
-print('Точность на тесте:', score[1])
+   print("Done, dT:", time.time() - t_start)
+
+   return model
+
+model = mnist_cnn_model()
+mnist_cnn_train(model)
+model.save('cnn_digits_28x28.h5')

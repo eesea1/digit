@@ -1,30 +1,20 @@
-import cv2
-import pytesseract
-import keras
-from keras.models import load_model
-from keras.datasets import mnist
-from keras.models import Sequential
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+from tensorflow import keras
+import tensorflow as tf
 import numpy as np
 
-model = load_model('mnist.h5')
+def cnn_digits_predict(model, image_file):
+   image_size = 28
+   img = keras.preprocessing.image.load_img(image_file,
+target_size=(image_size, image_size), color_mode='grayscale')
+   img_arr = np.expand_dims(img, axis=0)
+   img_arr = 1 - img_arr/255.0
+   img_arr = img_arr.reshape((1, 28, 28, 1))
 
-def predict_digit(img):
-    # изменение рзмера изобржений на 28x28
-    img = img.resize((28,28))
-    # конвертируем rgb в grayscale
-    img = img.convert('L')
-    img = np.array(img)
-    # изменение размерности для поддержки модели ввода и нормализации
-    img = img.reshape(1,28,28,1)
-    img = img/255.0
-    # предстказание цифры
-    res = model.predict([img])[0]
-    return np.argmax(res), max(res)
+   result = model.predict_classes([img_arr])
+   return result[0]
 
-pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe"
-
-img = cv2.imread('1.png', 0)
-thresh = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-
-data = pytesseract.image_to_string(thresh, lang='eng',config='--psm 6')
-print(data)
+model = tf.keras.models.load_model('cnn_digits_28x28.h5')
+print(cnn_digits_predict(model, '1.png'))
