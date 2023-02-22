@@ -1,74 +1,44 @@
-import time
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+import sys
 
-from tensorflow import keras
-from tensorflow.keras import layers
-from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, Activation, BatchNormalization, AveragePooling2D
-from tensorflow.keras.optimizers import SGD, RMSprop, Adam
-import tensorflow as tf
-import logging
 import numpy as np
+import cv2
 
+im = cv2.imread('trainphoto.png')
+im3 = im.copy()
 
-def mnist_cnn_model():
-   image_size = 28
-   num_channels = 1  # 1 for grayscale images
-   num_classes = 10  # Number of outputs
-   model = Sequential()
-   model.add(Conv2D(filters=32, kernel_size=(3,3), activation='relu',
-            padding='same',
-input_shape=(image_size, image_size, num_channels)))
-   model.add(MaxPooling2D(pool_size=(2, 2)))
-   model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu',
-            padding='same'))
-   model.add(MaxPooling2D(pool_size=(2, 2)))
-   model.add(Conv2D(filters=64, kernel_size=(3, 3), activation='relu',
-            padding='same'))
-   model.add(MaxPooling2D(pool_size=(2, 2)))
-   model.add(Flatten())
-   # Densely connected layers
-   model.add(Dense(128, activation='relu'))
-   # Output layer
-   model.add(Dense(num_classes, activation='softmax'))
-   model.compile(optimizer=Adam(), loss='categorical_crossentropy',
-            metrics=['accuracy'])
-   return model
+gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY)
+blur = cv2.GaussianBlur(gray, (5, 5), 0)
+thresh = cv2.adaptiveThreshold(blur, 255, 1, 1, 11, 2)
 
-def mnist_cnn_train(model):
-   (train_digits, train_labels), (test_digits, test_labels) = keras.datasets.mnist.load_data()
+#################      Now finding Contours         ###################
 
-   # Get image size
-   image_size = 28
-   num_channels = 1  # 1 for grayscale images
+contours, hierarchy = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
-   # re-shape and re-scale the images data
-   train_data = np.reshape(train_digits, (train_digits.shape[0], image_size, image_size, num_channels))
-   train_data = train_data.astype('float32') / 255.0
-   # encode the labels - we have 10 output classes
-   # 3 -> [0 0 0 1 0 0 0 0 0 0], 5 -> [0 0 0 0 0 1 0 0 0 0]
-   num_classes = 10
-   train_labels_cat = keras.utils.to_categorical(train_labels, num_classes)
+samples = np.empty((0, 100))
+responses = []
+keys = [i for i in range(48, 58)]
 
-   # re-shape and re-scale the images validation data
-   val_data = np.reshape(test_digits, (test_digits.shape[0], image_size, image_size, num_channels))
-   val_data = val_data.astype('float32') / 255.0
-   # encode the labels - we have 10 output classes
-   val_labels_cat = keras.utils.to_categorical(test_labels, num_classes)
+for cnt in contours:
+    if cv2.contourArea(cnt) > 50:
+        [x, y, w, h] = cv2.boundingRect(cnt)
 
-   print("Training the network...")
-   t_start = time.time()
+        if h > 28:
+            cv2.rectangle(im, (x, y), (x + w, y + h), (0, 0, 255), 2)
+            roi = thresh[y:y + h, x:x + w]
+            roismall = cv2.resize(roi, (10, 10))
+            cv2.imshow('norm', im)
+            key = cv2.waitKey(0)
 
-   # Start training the network
-   model.fit(train_data, train_labels_cat, epochs=8, batch_size=64,
-        validation_data=(val_data, val_labels_cat))
+            if key == 27:  # (escape to quit)
+                sys.exit()
+            elif key in keys:
+                responses.append(int(chr(key)))
+                sample = roismall.reshape((1, 100))
+                samples = np.append(samples, sample, 0)
 
-   print("Done, dT:", time.time() - t_start)
+responses = np.array(responses, np.float32)
+responses = responses.reshape((responses.size, 1))
+print("training complete")
 
-   return model
-
-model = mnist_cnn_model()
-mnist_cnn_train(model)
-model.save('cnn_digits_28x28.h5')
+np.savetxt('generalsamples.data', samples)
+np.savetxt('generalresponses.data', responses)
