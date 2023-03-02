@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import tensorflow as tf
 
+from PIL import Image
+
 
 def train() -> None:
     mnist = tf.keras.datasets.mnist
@@ -149,16 +151,18 @@ def predict_img(img):
     
     if count < 1300:
         try:
-            image = find_number(img)
+            rz_image = find_number(img)
         except:
             print("Error!")
     else:
-        image = find_number_on_img(img)
+        rz_image = find_number_on_img(img)
 
-    image = np.array([image])
+    image = np.array([rz_image])
     prediction = model.predict(image)
     
-    return np.argmax(prediction)
+    rz_image = Image.fromarray(rz_image)
+    
+    return np.argmax(prediction), rz_image
 
 
 def main() -> None:
