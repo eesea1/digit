@@ -20,8 +20,51 @@ def train() -> None:
 
     model.fit(x_train, y_train, epochs=10)
 
-    model.save('number.model')
+    model.save('number.model.new')
 
+
+def train_new() -> None:
+    mnist = tf.keras.datasets.mnist
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    x_train = x_train / 255
+    x_test = x_test / 255
+
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(
+            input_shape=(28, 28, 1),
+            filters=32,
+            kernel_size=(5, 5),
+            padding="same",
+            activation="relu"
+        ),
+        tf.keras.layers.MaxPool2D(pool_size=(2, 2)),
+
+        tf.keras.layers.Conv2D(
+            filters=64,
+            kernel_size=(5, 5),
+            padding="same",
+            activation="relu"
+        ),
+        tf.keras.layers.MaxPool2D(pool_size=(2, 2)),
+
+        tf.keras.layers.Flatten(),
+        tf.keras.layers.Dense(1024, activation=tf.nn.relu),
+        tf.keras.layers.Dense(1024, activation=tf.nn.relu),
+        tf.keras.layers.Dense(512, activation=tf.nn.relu),
+        tf.keras.layers.Dense(128, activation=tf.nn.relu),
+        tf.keras.layers.Dense(10, activation=tf.nn.softmax),
+    ])
+
+    model.compile(
+        optimizer="adam",
+        loss="sparse_categorical_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    model.fit(x_train.reshape(-1, 28, 28, 1), y_train, epochs=5)
+
+    model.save('numbers_new.model')
+    
 
 def load() -> None:
     mnist = tf.keras.datasets.mnist
@@ -29,7 +72,7 @@ def load() -> None:
 
     x_train = tf.keras.utils.normalize(x_train, axis=1)
     x_test = tf.keras.utils.normalize(x_test, axis=1)
-    return tf.keras.models.load_model('number.model')
+    return tf.keras.models.load_model('numbers_new.model')
 
 
 def show_img(img) -> None:
@@ -73,6 +116,7 @@ def find_number_on_img(img):
     img = cv2.imread(img)
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     msk = cv2.inRange(hsv, np.array([0, 155, 165]), np.array([205, 255, 255]))
+
     
     count: int = 0
     for i in range(len(msk)):
@@ -102,32 +146,39 @@ def find_number_on_img(img):
     dlt = cv2.dilate(msk, krn, iterations=1)
     thr = cv2.bitwise_and(dlt, msk)
     rz = cv2.resize(thr, (28, 28), fx = 1, fy = 1)
-    
     return rz
 
 
 def find_number(img):    
     img = cv2.imread(img)
 
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    gr = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     # 75 200
     # 40 30 
-    msk = cv2.Canny(hsv, 40, 30)
-    krn = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 5))
+    bl = cv2.medianBlur(gr, 5)
+    msk = cv2.Canny(bl, 40, 70)
+    krn = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
     dlt = cv2.dilate(msk, krn, iterations=1)
     thr = cv2.bitwise_and(dlt, msk)
-
     
-    contours, hierarchy = cv2.findContours(thr, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cls = cv2.morphologyEx(thr, cv2.MORPH_CLOSE, krn)
+    try:
+        cls = cls[y-20:y+h+20, x-20:x+w+20]
+    except:
+        ...
+    contours, hierarchy = cv2.findContours(cls, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     for cnt in contours:
         if cv2.contourArea(cnt) > 30:
             brect = cv2.boundingRect(cnt)
             x,y,w,h = brect
+            
+            cv2.rectangle(img, brect, (0,255,0), 2)
+            break
 
     try:
-        crop = thr[y-10:y+h+10, x-10:x+w+10]
+        crop = cls[y-10:y+h+10, x-10:x+w+10]
     except:
-        crop = thr
+        crop = cls
         
     rz = cv2.resize(crop, (28, 28))
     
@@ -149,24 +200,27 @@ def predict_img(img):
             if msk[i][j] != 0:
                 count += 1
     
-    if count < 1300:
+    print(count)
+    #1300
+    if count < 2040:
         try:
             rz_image = find_number(img)
         except:
             print("Error!")
     else:
         rz_image = find_number_on_img(img)
-
     image = np.array([rz_image])
     prediction = model.predict(image)
     
     rz_image = Image.fromarray(rz_image)
     
+    
     return np.argmax(prediction), rz_image
 
 
 def main() -> None:
-    print(predict_img(r"numbers\number18.png"))
+    # train_new()
+    print(predict_img(r"numbers\number12.png"))
 
 
 if __name__ == "__main__":
